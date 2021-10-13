@@ -19,7 +19,7 @@ enum CheckType {
     COMP_TO_COMP
 }
 
-public class CollisionObject {
+public abstract class CollisionObject {
 
     public static boolean checkCollision(CollisionObject objectA, CollisionObject objectB) {
         return !checkSeparation(objectA, objectB);
@@ -29,30 +29,30 @@ public class CollisionObject {
         CheckType checkType = getCheckType(objectA, objectB);
 
         if (checkType == CheckType.AABB_TO_AABB) {
-            return ((AABBObject) objectA).isSeparatedTo((AABBObject) objectB);
+            return ((AABBCollisionObject) objectA).isSeparatedFrom((AABBCollisionObject) objectB);
         }
         else if (checkType == CheckType.CIRC_TO_CIRC) {
 
         }
         else if (checkType == CheckType.POLY_TO_POLY) {
-            return ((PolygonObject) objectA).isSeparatedTo((PolygonObject) objectB);
+            return ((PolygonCollisionObject) objectA).isSeparatedFrom((PolygonCollisionObject) objectB);
         }
         else if (checkType == CheckType.COMP_TO_COMP) {
 
         }
         else if (checkType == CheckType.POLY_TO_CIRC) {
             if (objectA.objectType == ObjectType.TYPE_POLYGON)
-                return CHECK_SEPARATE_POLY_TO_CIRC((PolygonObject) objectA, (CircleObject) objectB);
+                return CHECK_SEPARATE_POLY_TO_CIRC((PolygonCollisionObject) objectA, (CircleCollisionObject) objectB);
             else
-                return CHECK_SEPARATE_POLY_TO_CIRC((PolygonObject) objectB, (CircleObject) objectA);
+                return CHECK_SEPARATE_POLY_TO_CIRC((PolygonCollisionObject) objectB, (CircleCollisionObject) objectA);
         }
         else if (checkType == CheckType.POLY_TO_COMP) {
 
         }
 
         if (objectA.objectType == ObjectType.TYPE_CIRCLE)
-            return CHECK_SEPARATE_CIRC_TO_COMP((CircleObject) objectA, (ComplexObject) objectB);
-        return CHECK_SEPARATE_CIRC_TO_COMP((CircleObject) objectB, (ComplexObject) objectA);
+            return CHECK_SEPARATE_CIRC_TO_COMP((CircleCollisionObject) objectA, (ComplexCollisionObject) objectB);
+        return CHECK_SEPARATE_CIRC_TO_COMP((CircleCollisionObject) objectB, (ComplexCollisionObject) objectA);
     }
 
     protected static CheckType getCheckType(CollisionObject objectA, CollisionObject objectB) {
@@ -93,14 +93,14 @@ public class CollisionObject {
 
     }
 
-    protected static boolean CHECK_SEPARATE_POLY_TO_CIRC(PolygonObject polygonObject, CircleObject circleObject) {
-        ArrayList<MathVector> separateAxes = polygonObject.getLeftNormals();
+    protected static boolean CHECK_SEPARATE_POLY_TO_CIRC(PolygonCollisionObject polygonCollisionObject, CircleCollisionObject circleCollisionObject) {
+        ArrayList<MathVector> separateAxes = polygonCollisionObject.getLeftNormals();
 
-        MathPoint circleOrigin = circleObject.getOrigin();
-        double circleRadius = circleObject.getRadius();
+        MathPoint circleOrigin = circleCollisionObject.getOrigin();
+        double circleRadius = circleCollisionObject.getRadius();
 
         for (MathVector separateAxis: separateAxes) {
-            double[] minmax = polygonObject.getMinMax(separateAxis);
+            double[] minmax = polygonCollisionObject.getMinMax(separateAxis);
             double minPoly = minmax[0];
             double maxPoly = minmax[1];
 
@@ -113,96 +113,99 @@ public class CollisionObject {
         }
         return false;
     }
-    protected static boolean CHECK_SEPARATE_POLY_TO_COMP(PolygonObject polygonObject, ComplexObject complexObject) {
+    protected static boolean CHECK_SEPARATE_POLY_TO_COMP(PolygonCollisionObject polygonCollisionObject, ComplexCollisionObject complexCollisionObject) {
         return false;
     }
-    protected static boolean CHECK_SEPARATE_CIRC_TO_COMP(CircleObject circleObject, ComplexObject complexObject) {
+    protected static boolean CHECK_SEPARATE_CIRC_TO_COMP(CircleCollisionObject circleCollisionObject, ComplexCollisionObject complexCollisionObject) {
         return false;
     }
 
     protected final ObjectType objectType;
 
     protected MathPoint referenceLocation;
-    protected ArrayList<MathPoint> referenceVertices;
-    protected ArrayList<MathPoint> rotatedVertices;
+
+    protected CollisionDetector collisionDetector;
+
+    protected Movable movable;
+    protected Rotatable rotatable;
+
+    protected AABBConverter aabbConverter;
 
     protected CollisionObject(CollisionObject collisionObject) {
         this.objectType = collisionObject.objectType;
 
         this.referenceLocation = new MathPoint(collisionObject.referenceLocation);
-        this.referenceVertices = new ArrayList<>(collisionObject.referenceVertices);
-        resetRotatedVertices();
+
+        initInterface();
     }
     protected CollisionObject(ObjectType objectType) {
         this.objectType = objectType;
 
         this.referenceLocation = new MathPoint();
-        this.referenceVertices = new ArrayList<>();
-        resetRotatedVertices();
+
+        initInterface();
     }
     protected CollisionObject(ObjectType objectType, MathPoint referenceLocation) {
         this.objectType = objectType;
 
         this.referenceLocation = new MathPoint(referenceLocation);
-        this.referenceVertices = new ArrayList<>();
-        resetRotatedVertices();
+
+        initInterface();
     }
-    protected CollisionObject(ObjectType objectType, MathPoint referenceLocation, ArrayList<MathPoint> referenceVertices) {
+    protected CollisionObject(
+            ObjectType objectType,
+            MathPoint referenceLocation,
+            CollisionDetector collisionDetector,
+            Movable movable,
+            Rotatable rotatable,
+            AABBConverter aabbConverter) {
         this.objectType = objectType;
 
         this.referenceLocation = new MathPoint(referenceLocation);
-        this.referenceVertices = new ArrayList<>(referenceVertices);
-        resetRotatedVertices();
+
+        this.collisionDetector = collisionDetector;
+        this.movable = movable;
+        this.rotatable = rotatable;
+        this.aabbConverter = aabbConverter;
     }
 
+    protected abstract void initInterface();
 
-    protected void resetRotatedVertices() {
-        rotatedVertices = new ArrayList<>(referenceVertices.size());
-        referenceVertices.forEach(refVertex -> rotatedVertices.add(new MathPoint(refVertex)));
+    public void move(MathVector movement) throws UnsupportedMovementException {
+        if (movable == null)
+            throw new UnsupportedMovementException("Movable is not assigned");
+        movable.moveObject(movement);
     }
-
-    public void move(MathVector movement) {
-        referenceLocation.move(movement);
-
-        if (referenceVertices.isEmpty())
-            return;
-
-        referenceVertices.forEach(vertex -> vertex.move(movement));
-        rotatedVertices.forEach(vertex -> vertex.move(movement));
-    }
-    public void move(MathPoint destination) {
+    public void move(MathPoint destination) throws UnsupportedMovementException {
         move(new MathVector(referenceLocation, destination));
     }
 
-    public void rotate(double angle) {
-        // AABB object does not allow rotating.
-        if (objectType == ObjectType.TYPE_AABB)
-            return;
+    public void rotate(double angle) throws UnsupportedRotationException {
+        if (rotatable == null)
+            throw new UnsupportedRotationException("Rotatable is not assigned");
 
-        // You cannot rotate a shape that does not exist right?
-        // Right?
-        if (rotatedVertices.isEmpty())
-            return;
+        rotatable.rotateObject(angle);
 
-        MathPoint originRefLocation = new MathPoint(referenceLocation);
-        move(MathPoint.POINT_ORIGIN);
-        for (int i = 0; i < referenceVertices.size(); i++) {
-            double x1 = referenceVertices.get(i).x;
-            double y1 = referenceVertices.get(i).y;
-            double x2 = x1 * Math.cos(angle) - y1 * Math.sin(angle);
-            double y2 = x1 * Math.sin(angle) + y1 * Math.cos(angle);
-
-            rotatedVertices.get(i).setPoint(x2, y2);
-        }
-        move(originRefLocation);
     }
 
-    public boolean isCollidedTo(CollisionObject hostileObject) {
-        return false;
+    public boolean isCollidedWith(CollisionObject hostileObject)
+            throws UnsupportedCollisionDetectionException, IllegalArgumentException {
+        return !isSeparatedFrom(hostileObject);
     }
 
-    public boolean isSeparatedTo(CollisionObject hostileObject) {
-        return true;
+    public boolean isSeparatedFrom(CollisionObject hostileObject)
+            throws UnsupportedCollisionDetectionException, IllegalArgumentException {
+        if (hostileObject == null)
+            throw new IllegalArgumentException("Hostile object cannot be null");
+        if (collisionDetector == null)
+            throw new UnsupportedCollisionDetectionException("CollisionDetector is not assigned");
+
+        return switch (hostileObject.getObjectType()) {
+            case TYPE_AABB -> collisionDetector.isSeparatedFrom((AABBCollisionObject) hostileObject);
+            case TYPE_POLYGON -> collisionDetector.isSeparatedFrom((PolygonCollisionObject) hostileObject);
+            case TYPE_CIRCLE -> collisionDetector.isSeparatedFrom((CircleCollisionObject) hostileObject);
+            case TYPE_COMPLEX -> collisionDetector.isSeparatedFrom((ComplexCollisionObject) hostileObject);
+        };
     }
 
     public void setReferenceLocation(MathPoint referenceLocation) {
@@ -212,36 +215,45 @@ public class CollisionObject {
     public MathPoint getReferenceLocation() {
         return referenceLocation;
     }
-    public ArrayList<MathPoint> getReferenceVertices() {
-        return referenceVertices;
-    }
-    public ArrayList<MathPoint> getRotatedVertices() {
-        return rotatedVertices;
-    }
+
     public ObjectType getObjectType() {
         return objectType;
     }
 
-    public AABBObject toAABBObject() {
-        if (rotatedVertices.isEmpty())
-            return null;
+    public void setCollisionDetector(CollisionDetector collisionDetector) {
+        this.collisionDetector = collisionDetector;
+    }
 
-        if (objectType == ObjectType.TYPE_AABB)
-            return new AABBObject((AABBObject) this);
+    public void setMovable(Movable movable) {
+        this.movable = movable;
+    }
 
-        double minX = rotatedVertices.get(0).x;
-        double maxX = minX;
-        double minY = rotatedVertices.get(0).y;
-        double maxY = minY;
+    public void setRotatable(Rotatable rotatable) {
+        this.rotatable = rotatable;
+    }
 
-        for (MathPoint vertex: rotatedVertices) {
-            minX = Math.min(minX, vertex.x);
-            maxX = Math.max(maxX, vertex.x);
-            minY = Math.min(minY, vertex.y);
-            maxY = Math.max(maxY, vertex.y);
-        }
+    public void setAABBConverter(AABBConverter aabbConverter) {
+        this.aabbConverter = aabbConverter;
+    }
 
-        return new AABBObject(referenceLocation, new MathPoint(minX, minY), new MathPoint(maxX, maxY));
+    public CollisionDetector getCollisionDetector() {
+        return collisionDetector;
+    }
+
+    public Movable getMovable() {
+        return movable;
+    }
+
+    public Rotatable getRotatable() {
+        return rotatable;
+    }
+
+    public AABBConverter getAABBConverter() {
+        return aabbConverter;
+    }
+
+    public AABBCollisionObject toAABBCollisionObject() {
+        return aabbConverter.convert();
     }
 
 }

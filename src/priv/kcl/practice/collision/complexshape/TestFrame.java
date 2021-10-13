@@ -29,19 +29,29 @@ public class TestFrame extends JFrame {
 
 class InnerPanel extends JPanel {
 
-    GraphicCircleObject g1;
-    GraphicPolygonObject g2;
+//    GraphicCircleCollisionObject g1;
+//    GraphicPolygonCollisionObject g2;
+    GraphicsComplexCollisionObject g1;
+    GraphicPolygonCollisionObject g2;
 
     InnerPanel() {
-        g1 = createCircleObject();
+//        g1 = createCircleObject();
+//        g2 = createPolyObject();
+        g1 = createComplexObject();
         g2 = createPolyObject();
 
-        g1.setReferenceLocation(new MathPoint(250, 250));
+        g1.move(new MathPoint(250, 250));
+
+//        g2.rotate(Math.toRadians(90));
+        g2.move(new MathPoint(250, 175));
+
 
         addMouseMotionListener(new MouseMotionAdapter() {
             @Override
             public void mouseMoved(MouseEvent e) {
                 super.mouseMoved(e);
+
+
 
                 if (e.isShiftDown())
                     g2.move(new MathPoint(e.getX(), e.getY()));
@@ -56,18 +66,18 @@ class InnerPanel extends JPanel {
     }
 
     private void checkCollision() {
-        if (CollisionObject.checkCollision(g1, g2))
-            g2.setFillColor(GraphicPolygonObject.COLLIDE_COLOR);
+        if (g2.isCollidedWith(g1))
+            g2.setFillColor(GraphicPolygonCollisionObject.COLLIDE_COLOR);
         else
-            g2.setFillColor(GraphicPolygonObject.SEPARATE_COLOR);
+            g2.setFillColor(GraphicPolygonCollisionObject.SEPARATE_COLOR);
 
     }
 
-    private GraphicCircleObject createCircleObject() {
-        return new GraphicCircleObject(new MathPoint(0, 0), 30);
+    private GraphicCircleCollisionObject createCircleObject() {
+        return new GraphicCircleCollisionObject(new MathPoint(0, 0), 30);
     }
 
-    private GraphicPolygonObject createPolyObject() {
+    private GraphicPolygonCollisionObject createPolyObject() {
         final double radius = 30;
         final int edgeCounts = 5;
 
@@ -79,7 +89,25 @@ class InnerPanel extends JPanel {
             vertices.add(new MathPoint(x, y));
         }
 
-        return new GraphicPolygonObject(new MathPoint(0, 0), vertices);
+        return new GraphicPolygonCollisionObject(new MathPoint(0, 0), vertices);
+    }
+
+    private GraphicsComplexCollisionObject createComplexObject() {
+        ArrayList<MathPoint> penisBodyVertices = new ArrayList<>(4);
+        penisBodyVertices.add(new MathPoint(15, -40));
+        penisBodyVertices.add(new MathPoint(-15, -40));
+        penisBodyVertices.add(new MathPoint(-15, 40));
+        penisBodyVertices.add(new MathPoint(15, 40));
+        CircleCollisionObject penisHead = new CircleCollisionObject(new MathPoint(0+0, 40+0), 20d);
+        PolygonCollisionObject penisBody = new PolygonCollisionObject(new MathPoint(0+0, 0+0), penisBodyVertices);
+        CircleCollisionObject penisBase1 = new CircleCollisionObject(new MathPoint(-15+0, -40+0), 10d);
+        CircleCollisionObject penisBase2 = new CircleCollisionObject(new MathPoint(15+0, -40+0), 10d);
+        ArrayList<CollisionObject> penis = new ArrayList<>(4);
+        penis.add(penisHead);
+        penis.add(penisBody);
+        penis.add(penisBase1);
+        penis.add(penisBase2);
+        return new GraphicsComplexCollisionObject(new MathPoint(0, 0), penis);
     }
 
     @Override
@@ -93,14 +121,14 @@ class InnerPanel extends JPanel {
 }
 
 
-class GraphicCircleObject extends CircleObject {
+class GraphicCircleCollisionObject extends CircleCollisionObject {
 
     public static final Color SEPARATE_COLOR = Color.PINK;
     public static final Color COLLIDE_COLOR = Color.RED;
 
     private Color fillColor = SEPARATE_COLOR;
 
-    GraphicCircleObject(MathPoint referenceLocation, double radius) {
+    GraphicCircleCollisionObject(MathPoint referenceLocation, double radius) {
         super(referenceLocation, radius);
     }
 
@@ -121,14 +149,14 @@ class GraphicCircleObject extends CircleObject {
     }
 }
 
-class GraphicPolygonObject extends PolygonObject {
+class GraphicPolygonCollisionObject extends PolygonCollisionObject {
 
     public static final Color SEPARATE_COLOR = Color.PINK;
     public static final Color COLLIDE_COLOR = Color.RED;
 
     private Color fillColor = SEPARATE_COLOR;
 
-    GraphicPolygonObject(MathPoint referencePoint, ArrayList<MathPoint> referenceVertices) {
+    GraphicPolygonCollisionObject(MathPoint referencePoint, ArrayList<MathPoint> referenceVertices) {
         super(referencePoint, referenceVertices);
     }
 
@@ -150,3 +178,43 @@ class GraphicPolygonObject extends PolygonObject {
     }
 }
 
+class GraphicsComplexCollisionObject extends ComplexCollisionObject {
+
+    public static final Color SEPARATE_COLOR = Color.PINK;
+    public static final Color COLLIDE_COLOR = Color.RED;
+
+    private Color fillColor = SEPARATE_COLOR;
+
+    GraphicsComplexCollisionObject(MathPoint referencePoint, ArrayList<CollisionObject> referenceCollisionParts) {
+        super(referencePoint, referenceCollisionParts);
+    }
+
+    public void setFillColor(Color fillColor) {
+        this.fillColor = fillColor;
+    }
+
+    public void onShow(Graphics g) {
+        Color originalColor = g.getColor();
+        g.setColor(fillColor);
+        for (CollisionObject rotatedElement : rotatedCollisionParts) {
+            if (rotatedElement.getObjectType() == ObjectType.TYPE_CIRCLE) {
+                MathPoint circleRefLocation = rotatedElement.getReferenceLocation();
+                double circleRadius = ((CircleCollisionObject) rotatedElement).getRadius();
+
+                GraphicCircleCollisionObject gcco = new GraphicCircleCollisionObject(circleRefLocation, circleRadius);
+                gcco.setFillColor(fillColor);
+                gcco.onShow(g);
+            }
+            else if (rotatedElement.getObjectType() == ObjectType.TYPE_POLYGON) {
+                MathPoint polygonRefLocation = rotatedElement.referenceLocation;
+                ArrayList<MathPoint> polygonRotatedVertices = ((PolygonCollisionObject) rotatedElement).getRotatedVertices();
+
+                GraphicPolygonCollisionObject gpco = new GraphicPolygonCollisionObject(polygonRefLocation, polygonRotatedVertices);
+                gpco.setFillColor(fillColor);
+                gpco.onShow(g);
+            }
+        }
+        g.setColor(originalColor);
+    }
+
+}

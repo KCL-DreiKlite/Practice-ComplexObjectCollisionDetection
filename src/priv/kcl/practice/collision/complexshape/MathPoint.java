@@ -5,7 +5,7 @@ import java.util.ArrayList;
 
 public class MathPoint {
 
-    public static final MathPoint POINT_ORIGIN = new MathPoint(0d, 0d);
+    public static final MathPoint ORIGIN_POINT = new MathPoint(0d, 0d);
 
     public static MathVector getVectorByPoints(MathPoint p1, MathPoint p2) {
         return new MathVector(p1, p2);
